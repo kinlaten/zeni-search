@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Scalar.AspNetCore;
 using ZeniSearch.Api.Data;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,9 +18,12 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
 
-    //add scalar ui
+    //add scalar ui for testing
+    app.MapScalarApiReference();
 
 }
+
+app.MapGet("/", () => "Hello world!");
 
 app.UseHttpsRedirection();
 app.UseAuthorization();

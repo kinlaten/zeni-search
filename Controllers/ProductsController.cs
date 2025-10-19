@@ -37,7 +37,7 @@ public class ProductsController : ControllerBase
     }
 
     //Get: api/products/[id]
-    [HttpGet]
+    [HttpGet("{id}")]
     public async Task<ActionResult<Product>> GetProduct(int id)
     {
         try
