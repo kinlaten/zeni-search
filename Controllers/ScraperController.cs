@@ -1,4 +1,5 @@
 using System.Security.Cryptography.X509Certificates;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ZeniSearch.Api.Services;
 
@@ -6,6 +7,7 @@ namespace ZeniSearch.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = "Admin")] //Only admin can manually trigger
 public class ScraperController : ControllerBase
 {
     private readonly TheIconicScraper _scraper;
@@ -49,7 +51,7 @@ public class ScraperController : ControllerBase
 
             // Runner
             var startTime = DateTime.UtcNow;
-            var productsScraped = await _scraper.ScapeProducts(searchTerm, maxProducts);
+            var productsScraped = await _scraper.ScraperProducts(searchTerm, maxProducts);
             var duration = (DateTime.UtcNow - startTime).TotalSeconds;
 
             return Ok(new

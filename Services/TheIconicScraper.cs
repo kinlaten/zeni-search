@@ -1,14 +1,11 @@
-using System.Runtime.InteropServices;
 using HtmlAgilityPack;
 using Microsoft.EntityFrameworkCore;
-using ZeniSearch.Api.Controllers;
 using ZeniSearch.Api.Data;
 using ZeniSearch.Api.Models;
 
 namespace ZeniSearch.Api.Services;
 
-// Fixed typo: TheIconicScaper → TheIconicScraper
-public class TheIconicScraper
+public class TheIconicScraper : IProductScraper
 {
     private readonly AppDbContext _context;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -16,6 +13,9 @@ public class TheIconicScraper
 
     //Base URL for the website
     private const string BASE_URL = "https://www.theiconic.com.au";
+
+    // Implement interface property
+    public string RetailerName => "The Iconic";
 
     // Constructor: Receives dependencies from DI
     public TheIconicScraper(
@@ -28,10 +28,8 @@ public class TheIconicScraper
         _logger = logger;
     }
 
-
-
-    //Main method: Scape products by search term
-    public async Task<int> ScapeProducts(string searchTerm, int maxProducts = 50)
+    //Main method: Scrape products by search term
+    public async Task<int> ScraperProducts(string searchTerm, int maxProducts = 50)
     {
         try
         {
@@ -41,7 +39,7 @@ public class TheIconicScraper
             var searchUrl = $"{BASE_URL}/catalog/?q={Uri.EscapeDataString(searchTerm)}";
 
             //2. Fetch the HTML from the website
-            var html = await FetchHtmlAsync(searchTerm);
+            var html = await FetchHtmlAsync(searchUrl);
 
             if (string.IsNullOrEmpty(html))
             {
@@ -89,9 +87,19 @@ public class TheIconicScraper
         }
         catch (Exception e)
         {
-            _logger.LogError(e, "Error scraping productgs for term: {SearchTerm}", searchTerm);
+            _logger.LogError(e, "Error scraping products for term: {SearchTerm}", searchTerm);
             throw;
         }
+    }
+
+    public async Task<bool> HealthCheck()
+    {
+        try
+        {
+            var html = await FetchHtmlAsync(BASE_URL);
+            return !string.IsNullOrEmpty(html);
+        }
+        catch { return false; }
     }
 
     // Helper: Step 1: Fetch HTML from website
