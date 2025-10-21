@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 using ZeniSearch.Api.Data;
 using ZeniSearch.Api.Services;
+using ZeniSearch.Api.Services.Scrapers;
 using Hangfire;
 using Hangfire.PostgreSql;
 

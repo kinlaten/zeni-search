@@ -1,8 +1,7 @@
 using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using ZeniSearch.Api.Services;
-
+using ZeniSearch.Api.Services.Scrapers;
 namespace ZeniSearch.Api.Controllers;
 
 [ApiController]

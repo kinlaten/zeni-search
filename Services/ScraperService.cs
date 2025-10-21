@@ -6,11 +6,11 @@ namespace ZeniSearch.Api.Services;
 public class ScraperService
 {
     private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger _logger;
+    private readonly ILogger<ScraperService> _logger;
 
     // Use IServiceProvider to create scope per job rather than AppDbContext
     // constructor
-    public ScraperService(IServiceProvider serviceProvider, ILogger logger)
+    public ScraperService(IServiceProvider serviceProvider, ILogger<ScraperService> logger)
     {
         _serviceProvider = serviceProvider;
         _logger = logger;

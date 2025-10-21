@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using ZeniSearch.Api.Data;
 using ZeniSearch.Api.Models;
 
-namespace ZeniSearch.Api.Services;
+namespace ZeniSearch.Api.Services.Scrapers;
 
 public class TheIconicScraper : IProductScraper
 {
