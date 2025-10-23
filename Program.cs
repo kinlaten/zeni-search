@@ -19,6 +19,11 @@ builder.Services.AddHttpClient();
 
 // Register Scraper Services
 builder.Services.AddScoped<IProductScraper, TheIconicScraper>();
+builder.Services.AddScoped<IProductScraper, AmazonScraper>();
+
+builder.Services.AddScoped<ScraperFactory>();
+builder.Services.AddScoped<ScraperService>();
+
 
 /* =========================
 HANGFIRE CONFIG

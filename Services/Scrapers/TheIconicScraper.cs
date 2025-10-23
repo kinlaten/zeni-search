@@ -111,7 +111,7 @@ public class TheIconicScraper : IProductScraper
             var client = _httpClientFactory.CreateClient();
 
             // Set User-Agent to identify our bot. Be honest
-            client.DefaultRequestHeaders.Add("User-Agent", "ZeniSearch/1.0 (Price Comparison Bot; Education Purpose)");
+            client.DefaultRequestHeaders.Add("User-Agent", "ZeniSearch/1.0 (Price Comparison Bot)");
 
             // Optional: Add delay to be respecful to other real human users. Dont be DDOS
             await Task.Delay(1000);

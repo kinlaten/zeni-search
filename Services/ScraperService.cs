@@ -1,5 +1,4 @@
 using System.ComponentModel.DataAnnotations;
-using ZeniSearch.Api.Data;
 
 namespace ZeniSearch.Api.Services;
 
@@ -21,30 +20,49 @@ public class ScraperService
     {
         _logger.LogInformation("Starting scheduled scrape for: {SearchTerm}", searchTerm);
 
-        try
+        using var scope = _serviceProvider.CreateScope();
+        var factory = scope.ServiceProvider.GetRequiredService<ScraperFactory>();
+
+        // Get all scrapers
+        var scrapers = factory.GetAllScrapers();
+
+        var results = new Dictionary<string, int>();
+
+        foreach (var scraper in scrapers)
         {
-            // Create scope for this job
-            // This ensures DBContext is disposed (release the connection to DB ), to allow connection from this job to DB
-            using var scope = _serviceProvider.CreateScope();
+            try
+            {
 
-            //Get scraper from scope
-            var scraper = scope.ServiceProvider
-                        .GetRequiredService<IProductScraper>();
+                _logger.LogInformation(
+                    "Scraping {Retailer} for '{SearchTerm}'",
+                    scraper.RetailerName,
+                    searchTerm
+                );
 
-            var count = await scraper.ScraperProducts(searchTerm, maxProducts: 100);
+                var count = await scraper.ScraperProducts(searchTerm, maxProducts: 100);
 
-            _logger.LogInformation(
-                "Scheduled scrape completd. Scraped {Count} products for '{SearchTerm}'",
-               count,
-               searchTerm
-            );
+                _logger.LogInformation(
+                    "{Retailer}: {Count} new products",
+                   scraper.RetailerName,
+                   count
+                );
+
+                // Rate limiting: wait between retailers
+                await Task.Delay(TimeSpan.FromSeconds(5));
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to scrape {RetailerName}", scraper.RetailerName);
+                results[scraper.RetailerName] = 0;
+            }
         }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "Scheduled scrape failed for: {SearchTerm}", searchTerm);
-            throw; //hangfire will retry
-        }
 
+        var total = results.Values.Sum();
+        _logger.LogInformation(
+            "Multi-retailer scrape complete. Total: {Total} new products. Details: {@Results}",
+            total,
+            results
+        );
     }
 
     public async Task ScrapePopularProducts()
@@ -57,6 +75,34 @@ public class ScraperService
 
             // Rate limiting: wait between searches
             await Task.Delay(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    public async Task ScrapeHealthyRetailers(string searchTerm)
+    {
+        using var scope = _serviceProvider.CreateScope();
+        var factory = scope.ServiceProvider.GetRequiredService<ScraperFactory>();
+
+
+        // Only get scrapers that pass health check
+        var healthyScrapers = await factory.GetHealthyScrapers();
+
+        _logger.LogInformation(
+            "Found {Count} healthy scrapers",
+            healthyScrapers.Count()
+        );
+
+        foreach (var scraper in healthyScrapers)
+        {
+            try
+            {
+                await scraper.ScraperProducts(searchTerm, maxProducts: 50);
+                await Task.Delay(TimeSpan.FromSeconds(5));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Scrape failed for {Retailer}", scraper.RetailerName);
+            }
         }
     }
 }
