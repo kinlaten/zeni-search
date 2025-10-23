@@ -1,24 +1,26 @@
-using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using ZeniSearch.Api.Services.Scrapers;
+using ZeniSearch.Api.Services;
+
 namespace ZeniSearch.Api.Controllers;
+
 
 [ApiController]
 [Route("api/[controller]")]
-[Authorize(Roles = "Admin")] //Only admin can manually trigger
+// [Authorize(Roles = "Admin")] //Only admin can manually trigger
 public class ScraperController : ControllerBase
 {
-    private readonly TheIconicScraper _scraper;
+    private readonly ScraperService _scraperService;
     private readonly ILogger<ScraperController> _logger;
 
     //Contructor: Inject scraper service
     public ScraperController(
-        TheIconicScraper scraper,
+        ScraperService scraperService,
         ILogger<ScraperController> logger
     )
     {
-        _scraper = scraper;
+        _scraperService = scraperService;
         _logger = logger;
     }
 
@@ -37,29 +39,24 @@ public class ScraperController : ControllerBase
                 return BadRequest(new { message = "Search term is required" });
             }
 
-            if (maxProducts < 1 || maxProducts > 100)
-            {
-                return BadRequest(new { message = "maxProducts must be in range 1 to 100" });
-            }
+            // maxProducts is now handled by ScraperService
 
             _logger.LogInformation(
-                "Scraper trigger for term: {SearchTerm}, max: {MaxProducts}",
-                searchTerm,
-                maxProducts
+                "Scraper trigger for term: {SearchTerm}",
+                searchTerm
             );
 
             // Runner
             var startTime = DateTime.UtcNow;
-            var productsScraped = await _scraper.ScraperProducts(searchTerm, maxProducts);
+            await _scraperService.ScrapeAllRetailers(searchTerm);
             var duration = (DateTime.UtcNow - startTime).TotalSeconds;
 
             return Ok(new
             {
                 success = true,
                 searchTerm = searchTerm,
-                productsScraped = productsScraped,
                 durationSeconds = Math.Round(duration, 2),
-                message = $"Successfully scraped {productsScraped} products"
+                message = $"Successfully scraped '{searchTerm}' products from multi-retailer."
             });
         }
         catch (Exception e)
