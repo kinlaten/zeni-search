@@ -5,47 +5,40 @@ using ZeniSearch.Api.Services.Scrapers;
 using ZeniSearch.Api.Data;
 using ZeniSearch.Api.Models;
 using System;
-using System.Threading;
 using System.Threading.Tasks;
 using System.Net.Http;
 using Microsoft.EntityFrameworkCore;
 
 namespace ZeniSearch.Api.Tests.Unit.Scrapers;
 
-public class TheIconicScraperTests
+/// <summary>
+/// Tests specific to TheIconicScraper implementation
+/// </summary>
+public class TheIconicScraperTests : BaseScraperTests<TheIconicScraper>
 {
-    private readonly Mock<ILogger<TheIconicScraper>> _mockLogger;
-    private readonly TheIconicScraper _scraper;
+    private readonly Mock<IHttpClientFactory> _mockHttpClientFactory;
 
     public TheIconicScraperTests()
     {
-        // For unit tests, we skip database mocking - focus on HTTP/parsing logic only
-        _mockLogger = new Mock<ILogger<TheIconicScraper>>();
+        _mockHttpClientFactory = new Mock<IHttpClientFactory>();
+    }
 
-        // Create a mock DbContext with minimal setup to avoid constructor issues
+    protected override TheIconicScraper CreateScraper()
+    {
         var mockContext = CreateMockAppDbContext();
         var mockHttpClientFactory = new Mock<IHttpClientFactory>();
-
-        _scraper = new TheIconicScraper(mockContext, mockHttpClientFactory.Object, _mockLogger.Object);
+        return new TheIconicScraper(mockContext, mockHttpClientFactory.Object, MockLogger.Object);
     }
 
-    /// <summary>
-    /// Creates a mock AppDbContext that doesn't try to initialize the real database
-    /// </summary>
-    private AppDbContext CreateMockAppDbContext()
-    {
-        var options = new DbContextOptionsBuilder<AppDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-
-        return new AppDbContext(options);
-    }
+    // ========================
+    // SPECIFIC TESTS (TheIconic Only)
+    // ========================
 
     [Fact]
-    public void RetailerName_ShouldReturn_TheIconic()
+    public void RetailerName_ShouldBeTheIconic()
     {
-        // Arrange & Act
-        var retailerName = _scraper.RetailerName;
+        // Act
+        var retailerName = Scraper.RetailerName;
 
         // Assert
         Assert.Equal("The Iconic", retailerName);
@@ -66,7 +59,7 @@ public class TheIconicScraperTests
             .Setup(f => f.CreateClient(It.IsAny<string>()))
             .Returns(mockHttpClient.Object);
 
-        var scraper = new TheIconicScraper(CreateMockAppDbContext(), mockHttpClientFactory.Object, _mockLogger.Object);
+        var scraper = new TheIconicScraper(CreateMockAppDbContext(), mockHttpClientFactory.Object, MockLogger.Object);
 
         // Act
         var result = await scraper.HealthCheck();
@@ -74,4 +67,11 @@ public class TheIconicScraperTests
         // Assert
         Assert.True(result);
     }
+
+    // TODO: Add more TheIconic-specific tests here
+    // For example:
+    // - Test parsing The Iconic's specific HTML structure
+    // - Test handling of The Iconic's price format
+    // - Test The Iconic's product URL format
 }
+
