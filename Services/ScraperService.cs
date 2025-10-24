@@ -39,7 +39,7 @@ public class ScraperService
                     searchTerm
                 );
 
-                var count = await scraper.ScraperProducts(searchTerm, maxProducts: 100);
+                var count = await scraper.ScrapeProducts(searchTerm, maxProducts: 100);
 
                 _logger.LogInformation(
                     "{Retailer}: {Count} new products",
@@ -96,7 +96,7 @@ public class ScraperService
         {
             try
             {
-                await scraper.ScraperProducts(searchTerm, maxProducts: 50);
+                await scraper.ScrapeProducts(searchTerm, maxProducts: 50);
                 await Task.Delay(TimeSpan.FromSeconds(5));
             }
             catch (Exception ex)

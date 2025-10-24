@@ -29,7 +29,7 @@ public class TheIconicScraper : IProductScraper
     }
 
     //Main method: Scrape products by search term
-    public async Task<int> ScraperProducts(string searchTerm, int maxProducts = 50)
+    public async Task<int> ScrapeProducts(string searchTerm, int maxProducts = 50)
     {
         try
         {

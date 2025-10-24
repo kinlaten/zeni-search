@@ -29,7 +29,7 @@ public class AmazonScraper : IProductScraper
     }
 
     // Main method: Scrape products by search term
-    public async Task<int> ScraperProducts(string searchTerm, int maxProducts)
+    public async Task<int> ScrapeProducts(string searchTerm, int maxProducts)
     {
         //TODO: Logic to scrape product from AZ
         try
