@@ -4,14 +4,14 @@ namespace ZeniSearch.Api.Services;
 
 public class ScraperService
 {
-    private readonly IServiceProvider _serviceProvider;
+    private readonly ScraperFactory _factory;
     private readonly ILogger<ScraperService> _logger;
 
     // Use IServiceProvider to create scope per job rather than AppDbContext
     // constructor
-    public ScraperService(IServiceProvider serviceProvider, ILogger<ScraperService> logger)
+    public ScraperService(ScraperFactory factory, ILogger<ScraperService> logger)
     {
-        _serviceProvider = serviceProvider;
+        _factory = factory;
         _logger = logger;
     }
 
@@ -20,11 +20,8 @@ public class ScraperService
     {
         _logger.LogInformation("Starting scheduled scrape for: {SearchTerm}", searchTerm);
 
-        using var scope = _serviceProvider.CreateScope();
-        var factory = scope.ServiceProvider.GetRequiredService<ScraperFactory>();
-
         // Get all scrapers
-        var scrapers = factory.GetAllScrapers();
+        var scrapers = _factory.GetAllScrapers();
 
         var results = new Dictionary<string, int>();
 
@@ -80,12 +77,8 @@ public class ScraperService
 
     public async Task ScrapeHealthyRetailers(string searchTerm)
     {
-        using var scope = _serviceProvider.CreateScope();
-        var factory = scope.ServiceProvider.GetRequiredService<ScraperFactory>();
-
-
         // Only get scrapers that pass health check
-        var healthyScrapers = await factory.GetHealthyScrapers();
+        var healthyScrapers = await _factory.GetHealthyScrapers();
 
         _logger.LogInformation(
             "Found {Count} healthy scrapers",

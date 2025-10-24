@@ -1,44 +1,40 @@
-using System.Numerics;
 
 namespace ZeniSearch.Api.Services;
 
 // Factory to get the right scraper for a retailer
 public class ScraperFactory
 {
-    private readonly IServiceProvider _serviceProvider;
+    private readonly IEnumerable<IProductScraper> _scrapers;
     private readonly ILogger<ScraperFactory> _logger;
 
     public ScraperFactory(
-        IServiceProvider serviceProvider,
+        IEnumerable<IProductScraper> scrapers,
         ILogger<ScraperFactory> logger
     )
     {
-        _serviceProvider = serviceProvider;
+        _scrapers = scrapers;
         _logger = logger;
     }
 
     // Get all registed scrapers
     public IEnumerable<IProductScraper> GetAllScrapers()
     {
-        return _serviceProvider.GetServices<IProductScraper>();
+        return _scrapers;
     }
 
     // Get scraper based on retailer name
     public IProductScraper? GetService(string retailerName)
     {
-        var scrapers = GetAllScrapers();
-
-        return scrapers.FirstOrDefault(s =>
+        return _scrapers.FirstOrDefault(s =>
         s.RetailerName.Equals(retailerName, StringComparison.OrdinalIgnoreCase));
     }
 
     // Get all healthy scrapers
     public async Task<IEnumerable<IProductScraper>> GetHealthyScrapers()
     {
-        var scrapers = GetAllScrapers();
         var healthy = new List<IProductScraper>();
 
-        foreach (var scraper in scrapers)
+        foreach (var scraper in _scrapers)
         {
             try
             {
