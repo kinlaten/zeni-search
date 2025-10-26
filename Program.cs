@@ -18,7 +18,8 @@ builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connect
 builder.Services.AddHttpClient();
 
 // Register Scraper Services
-builder.Services.AddScoped<IProductScraper, TheIconicScraper>();
+// builder.Services.AddScoped<IProductScraper, TheIconicScraper>();
+builder.Services.AddScoped<IProductScraper, BirdsNestScraper>();
 // builder.Services.AddScoped<IProductScraper, AmazonScraper>(); // Archived
 
 builder.Services.AddScoped<ScraperFactory>();

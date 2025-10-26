@@ -109,7 +109,7 @@ public class AmazonScraper : IProductScraper
         {
             var client = _httpClientFactory.CreateClient();
 
-            client.DefaultRequestHeaders.Add("User-Agent", "ZeniSearch/1.0 (Price Comparison Bot)");
+            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36");
 
             await Task.Delay(1000);
 

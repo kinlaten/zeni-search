@@ -1,27 +1,24 @@
 using HtmlAgilityPack;
-using Microsoft.EntityFrameworkCore;
 using ZeniSearch.Api.Data;
+using Microsoft.EntityFrameworkCore;
 using ZeniSearch.Api.Models;
 
 namespace ZeniSearch.Api.Services.Scrapers;
 
-public class TheIconicScraper : IProductScraper
+public class BirdsNestScraper : IProductScraper
 {
     private readonly AppDbContext _context;
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly ILogger<TheIconicScraper> _logger;
+    private readonly ILogger<BirdsNestScraper> _logger;
 
-    //Base URL for the website
-    private const string BASE_URL = "https://www.theiconic.com.au";
 
-    // Implement interface property
-    public string RetailerName => "The Iconic";
+    private const string BASE_URL = "https://www.birdsnest.com.au";
 
-    // Constructor: Receives dependencies from DI
-    public TheIconicScraper(
-        AppDbContext context,
-        IHttpClientFactory httpClientFactory,
-        ILogger<TheIconicScraper> logger)
+    public string RetailerName => "Birds Nest";
+
+    public BirdsNestScraper(AppDbContext context,
+    IHttpClientFactory httpClientFactory,
+    ILogger<BirdsNestScraper> logger)
     {
         _context = context;
         _httpClientFactory = httpClientFactory;
@@ -36,7 +33,7 @@ public class TheIconicScraper : IProductScraper
             _logger.LogInformation("Starting scrape for search term: {SearchTerm}", searchTerm);
 
             //1. Build the search URL
-            var searchUrl = $"{BASE_URL}/catalog/?q={Uri.EscapeDataString(searchTerm)}";
+            var searchUrl = $"{BASE_URL}/search.php?search_query={Uri.EscapeDataString(searchTerm)}&section=content";
 
             //2. Fetch the HTML from the website
             var html = await FetchHtmlAsync(searchUrl);
@@ -110,6 +107,7 @@ public class TheIconicScraper : IProductScraper
             // Create HttpClient using factory
             var client = _httpClientFactory.CreateClient();
 
+            // Set User-Agent to identify our bot. Be honest
             client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36");
 
             // Optional: Add delay to be respecful to other real human users. Dont be DDOS
@@ -147,8 +145,8 @@ public class TheIconicScraper : IProductScraper
             var doc = new HtmlDocument();
             doc.LoadHtml(html);
 
-            //Find all divs that have class 'product'
-            var productNodes = doc.DocumentNode.SelectNodes("//div[contains(@class,'product')]");
+            //Find all divs that have class 'product-card-container'
+            var productNodes = doc.DocumentNode.SelectNodes("//div[contains(@class,'product-card-container')]");
 
             if (productNodes == null || productNodes.Count == 0)
             {
@@ -193,53 +191,64 @@ public class TheIconicScraper : IProductScraper
     {
         try
         {
-            // 0. Get Product Info node
-            var productDetailNode = node.SelectSingleNode(".//a[contains(@class, 'product-details')]");
+            // 1. Extract Product URL from data-producturl attribute of the relevant child node
+            var productUrlNode = node.SelectSingleNode(".//div[contains(@class, 'product-card') and @data-producturl]");
+            var relativeUrl = productUrlNode?.GetAttributeValue("data-producturl", "");
 
-            // 1. Extract name 
-            var nameNode = productDetailNode?.SelectSingleNode(".//span[contains(@class, 'name')]");
-            var name = nameNode?.InnerText?.Trim();
-
-            if (string.IsNullOrEmpty(name))
+            if (string.IsNullOrEmpty(relativeUrl))
             {
-                _logger.LogWarning("Product name not found in node");
+                _logger.LogWarning("Product URL not found in node. Node HTML: {NodeHtml}", node.InnerHtml);
                 return null;
             }
 
-            // 2. Extract brand: optional
-            var brandNode = productDetailNode?.SelectSingleNode(".//span[contains(@class, 'brand')]");
-            var brand = brandNode?.InnerText.Trim();
+            // Absolute Url
+            var productUrl = relativeUrl.StartsWith("https")
+                            ? relativeUrl
+                            : $"{BASE_URL}{(relativeUrl.StartsWith("/") ? "" : "/")}{relativeUrl}";
 
 
-            // 3. Extract price
-            var priceNode = productDetailNode?.SelectSingleNode(".//span[contains(@class, 'price')]");
-            var priceText = priceNode?.InnerText.Trim();
+            // 2. Extract raw Name, prioritizing 'alt' attribute of the main image
+            var imgNodeForName = node.SelectSingleNode(".//img[@alt]");
+            var rawName = imgNodeForName?.GetAttributeValue("alt", "").Trim();
 
-            //Parse price - remove currency sign and convert to decimal: $25.88 => 25.88
+            if (string.IsNullOrEmpty(rawName))
+            {
+                imgNodeForName = node.SelectSingleNode(".//img[@title]"); // Fallback to title if alt is empty
+                rawName = imgNodeForName?.GetAttributeValue("title", "").Trim();
+            }
+
+            if (string.IsNullOrEmpty(rawName))
+            {
+                _logger.LogWarning("Product name not found in node. Node HTML: {NodeHtml}", node.InnerHtml);
+                return null;
+            }
+            var name = rawName;
+
+            // 3. Extract Brand from URL
+            var brand = ParseBrandFromUrl(relativeUrl);
+
+            // If brand was not found from URL, try to extract it from a specific node as a fallback
+            if (string.IsNullOrEmpty(brand))
+            {
+                var brandNode = node.SelectSingleNode(".//div[contains(@class, 'bEdZhHjcOVrOqVKS1zCj')]");
+                brand = brandNode?.InnerText?.Trim();
+            }
+
+
+            // 4. Extract Price
+            var priceNode = node.SelectSingleNode(".//span[contains(@class, 'globalPrices-defaultPrice')]");
+            var priceText = priceNode?.InnerText?.Trim();
+
             var price = ParsePrice(priceText);
 
             if (price == 0)
             {
-                _logger.LogWarning("Invalid price for product: {Name}", name);
+                _logger.LogWarning("Invalid price for product: {Name}. Price Text: '{PriceText}'. Node HTML: {NodeHtml}", name, priceText, node.InnerHtml);
                 return null;
             }
 
-            // 4. Extract Product URL
-            var relativeUrl = productDetailNode?.GetAttributeValue("href", "");
-
-            if (string.IsNullOrEmpty(relativeUrl))
-            {
-                _logger.LogWarning("Product URL not found for: {Name}", name);
-                return null;
-            }
-
-            //Convert relative URL  to absolute URL
-            var productUrl = relativeUrl.StartsWith("https")
-                            ? relativeUrl :
-                            $"{BASE_URL}{(relativeUrl.StartsWith("/") ? "" : "/")}{relativeUrl}";
-
-            // 5. Extract image Url
-            var imgNode = node.SelectSingleNode(".//img[@src]");
+            // 5. Extract Image URL from the src attribute of the main image
+            var imgNode = node.SelectSingleNode(".//img[contains(@class, 'lazyloaded') and @src]");
             var imgUrl = imgNode?.GetAttributeValue("src", "");
 
             // 6. Create Product object
@@ -250,13 +259,28 @@ public class TheIconicScraper : IProductScraper
                 Price = price,
                 ProductUrl = productUrl,
                 ImageUrl = imgUrl,
-                RetailerName = RetailerName,
+                RetailerName = RetailerName, // Use the class property
                 LastUpdated = DateTime.UtcNow
             };
 
             return product;
         }
-        catch (Exception e) { _logger.LogError(e, "Error extracting product from node"); return null; }
+        catch (Exception e) { _logger.LogError(e, "Error extracting product from node. Node HTML: {NodeHtml}", node.InnerHtml); return null; }
+    }
+
+    /// <summary>
+    /// Helper to parse brand from a product URL like '/brands/los-cabos/granada-sandal-los-granada'
+    /// </summary>
+    private string? ParseBrandFromUrl(string relativeUrl)
+    {
+        var segments = relativeUrl.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        if (segments.Length >= 2 && segments[0].Equals("brands", StringComparison.OrdinalIgnoreCase))
+        {
+            var brandSlug = segments[1];
+            // Convert hyphen-separated slug to Title Case (e.g., "los-cabos" -> "Los Cabos")
+            return System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(brandSlug.Replace('-', ' '));
+        }
+        return null;
     }
 
 
@@ -274,7 +298,6 @@ public class TheIconicScraper : IProductScraper
                         .Replace("$", "")
                         .Replace("AUD", "")
                         .Trim();
-
 
             // 2. Parse as decimal
             if (decimal.TryParse(cleaned, out var price))
