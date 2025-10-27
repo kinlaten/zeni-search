@@ -25,6 +25,9 @@ builder.Services.AddScoped<IProductScraper, BirdsNestScraper>();
 builder.Services.AddScoped<ScraperFactory>();
 builder.Services.AddScoped<ScraperService>();
 
+// Add Playwright browser Service 
+builder.Services.AddSingleton<PlaywrightBrowserService>();
+
 
 /* =========================
 HANGFIRE CONFIG
@@ -60,6 +63,10 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+// Init Playwright browser
+var playwrightService = app.Services.GetRequiredService<PlaywrightBrowserService>();
+await playwrightService.InitializeAsync();
 
 if (app.Environment.IsDevelopment())
 {
