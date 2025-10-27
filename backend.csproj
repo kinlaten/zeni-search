@@ -26,6 +26,7 @@
   <!-- Exclude Tests directory from compilation -->
   <ItemGroup>
     <Compile Remove="Tests/**/*.cs" />
+    <Compile Remove="PlaywrightTests/**/*.cs" />
   </ItemGroup>
 
 </Project>
