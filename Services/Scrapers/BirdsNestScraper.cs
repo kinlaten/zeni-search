@@ -217,12 +217,12 @@ public class BirdsNestScraper : IProductScraper
 
 
             // 4. Extract Price
-            var priceNode = node.SelectSingleNode(".//span[contains(@class, 'globalPrices-defaultPrice')]");
+            // Try find sale price first, if not exist, fallback to origin price
+            var priceNode = node.SelectSingleNode(".//span[contains(@class, 'globalPrices-currentPrice')]");
 
-            // Fallback: if default price not found, try current price
             if (priceNode == null)
             {
-                priceNode = node.SelectSingleNode(".//span[contains(@class, 'globalPrices-currentPrice')]");
+                priceNode = node.SelectSingleNode(".//span[contains(@class, 'globalPrices-defaultPrice')]");
             }
 
             var priceText = priceNode?.InnerText?.Trim();

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Microsoft.AspNetCore.SignalR;
 
 namespace ZeniSearch.Api.Models;
 
@@ -34,5 +35,6 @@ public class Product
     [MaxLength(1000)]
     public string? ImageUrl { get; set; }
 
-
+    // Track PriceHistory of a product
+    public ICollection<PriceHistory> PriceHistory { get; set; } = new List<PriceHistory>();
 }
