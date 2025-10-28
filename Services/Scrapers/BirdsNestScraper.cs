@@ -56,15 +56,26 @@ public class BirdsNestScraper : IProductScraper
                 return 0;
             }
 
+            //3.5 Remove duplicates within the current batch (same URL scraped twice)
+            var uniqueProducts = products
+                            .GroupBy(p => p.ProductUrl)
+                            .Select(g => g.First())
+                            .ToList();
+
+            if (uniqueProducts.Count < products.Count)
+            {
+                _logger.LogInformation("Removed {Count} duplicate products from current batch", products.Count - uniqueProducts.Count);
+            }
+
             //4. Check which products already exist in database - avoid duplicated
             var existingUrls = await _context.Product
-                            .Where(p => products.Select(x => x.ProductUrl).Contains(p.ProductUrl))
+                            .Where(p => uniqueProducts.Select(x => x.ProductUrl).Contains(p.ProductUrl))
                             .Select(p => p.ProductUrl)
                             .ToListAsync();
 
 
             //Filter out products already exist in db
-            var newProducts = products
+            var newProducts = uniqueProducts
                             .Where(p => !existingUrls.Contains(p.ProductUrl))
                             .ToList();
 
@@ -207,8 +218,14 @@ public class BirdsNestScraper : IProductScraper
 
             // 4. Extract Price
             var priceNode = node.SelectSingleNode(".//span[contains(@class, 'globalPrices-defaultPrice')]");
-            var priceText = priceNode?.InnerText?.Trim();
 
+            // Fallback: if default price not found, try current price
+            if (priceNode == null)
+            {
+                priceNode = node.SelectSingleNode(".//span[contains(@class, 'globalPrices-currentPrice')]");
+            }
+
+            var priceText = priceNode?.InnerText?.Trim();
             var price = ParsePrice(priceText);
 
             if (price == 0)
