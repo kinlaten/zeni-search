@@ -36,7 +36,7 @@ public class TheIconicScraper : IProductScraper
             _logger.LogInformation("Starting scrape for search term: {SearchTerm}", searchTerm);
 
             //1. Build the search URL
-            var searchUrl = $"{BASE_URL}/catalog/?q={Uri.EscapeDataString(searchTerm)}";
+            var searchUrl = $"{BASE_URL}/catalog/?q={Uri.EscapeDataString(searchTerm)}&page=1&sort=price_low";
 
             //2. Fetch the HTML from the website
             var html = await FetchHtmlAsync(searchUrl);

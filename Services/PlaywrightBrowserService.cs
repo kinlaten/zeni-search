@@ -78,9 +78,9 @@ public class PlaywrightBrowserService : IAsyncDisposable
                 Timeout = timeoutMs
             });
 
-            // Wait a bit for nay dynamic content to load
+            // Wait a bit for any dynamic content to load
             await page.WaitForLoadStateAsync(LoadState.DOMContentLoaded);
-            await Task.Delay(2000);
+            await Task.Delay(500);
 
             string content = await page.ContentAsync();
             _logger.LogInformation("Successfully fetched page content ({ByteCount} bytes)", content.Length);
@@ -90,49 +90,6 @@ public class PlaywrightBrowserService : IAsyncDisposable
         catch (Exception e)
         {
             _logger.LogError(e, "Failed to fetch page content from {Url}", url);
-            throw;
-        }
-        finally
-        {
-            if (page != null)
-            {
-                await page.CloseAsync();
-            }
-        }
-    }
-
-    public async Task<string> FetchApiResponseAsync(string url, string apiUrlPattern)
-    {
-        IPage? page = null;
-
-        try
-        {
-            page = await CreatePageAsync();
-
-            _logger.LogInformation("Setting up API interception for pattern: {Pattern}", apiUrlPattern);
-
-            // Start listening for the API response
-            var apiResponseTask = page.WaitForResponseAsync(response =>
-            response.Url.Contains(apiUrlPattern) && response.Status == 200);
-
-            // Nav to page
-            await page.GotoAsync(url, new PageGotoOptions
-            {
-                WaitUntil = WaitUntilState.NetworkIdle,
-                Timeout = 30000
-            });
-
-            // Wait for API response
-            var response = await apiResponseTask;
-            string content = await response.TextAsync();
-
-            _logger.LogInformation("Successfully captured API response ({ByteCount} bytes)", content.Length);
-
-            return content;
-        }
-        catch (Exception e)
-        {
-            _logger.LogError(e, "Failed to fetch API response form {Url}", url);
             throw;
         }
         finally

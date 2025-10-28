@@ -36,10 +36,10 @@ public class BirdsNestScraper : IProductScraper
             _logger.LogInformation("Starting scrape for search term: {SearchTerm}", searchTerm);
 
             //1. Build the search URL
-            var searchUrl = $"{BASE_URL}/search.php?search_query={Uri.EscapeDataString(searchTerm)}&section=content";
+            var searchUrl = $"{BASE_URL}/search.php?search_query={Uri.EscapeDataString(searchTerm)}&fh__product_type=%3E%7Bitem%7D&fh__sort_by=price_ascending&fh__page=1&page=1&section=content";
 
             //2. Fetch the HTML from the website using Playwright (browser automation)
-            var html = await FetchProductsFromPlaywrightAsync(searchTerm);
+            var html = await FetchProductsFromPlaywrightAsync(searchTerm, searchUrl);
 
             if (string.IsNullOrEmpty(html))
             {
@@ -252,8 +252,6 @@ public class BirdsNestScraper : IProductScraper
         }
         return null;
     }
-
-
     private decimal ParsePrice(string? priceText)
     {
         if (string.IsNullOrEmpty(priceText))
@@ -285,12 +283,10 @@ public class BirdsNestScraper : IProductScraper
     /// Fetch rendered HTML from Birds Nest website using Playwright (headless browser)
     /// This approach handles dynamic JavaScript rendering that simple HTTP requests cannot
     /// </summary>
-    private async Task<string> FetchProductsFromPlaywrightAsync(string searchTerm)
+    private async Task<string> FetchProductsFromPlaywrightAsync(string searchTerm, string searchUrl)
     {
         try
         {
-            var searchUrl = $"{BASE_URL}/search.php?search_query={Uri.EscapeDataString(searchTerm)}&section=content";
-
             _logger.LogInformation("Fetching Birds Nest products using Playwright for: {SearchTerm}", searchTerm);
 
             // Use Playwright to fetch the fully rendered HTML
