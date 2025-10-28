@@ -36,7 +36,7 @@ public class TheIconicScraper : IProductScraper
             _logger.LogInformation("Starting scrape for search term: {SearchTerm}", searchTerm);
 
             //1. Build the search URL
-            var searchUrl = $"{BASE_URL}/catalog/?q={Uri.EscapeDataString(searchTerm)}";
+            var searchUrl = $"{BASE_URL}/catalog/?q={Uri.EscapeDataString(searchTerm)}&page=1&sort=price_low";
 
             //2. Fetch the HTML from the website
             var html = await FetchHtmlAsync(searchUrl);
@@ -212,7 +212,13 @@ public class TheIconicScraper : IProductScraper
 
 
             // 3. Extract price
-            var priceNode = productDetailNode?.SelectSingleNode(".//span[contains(@class, 'price')]");
+            // Get sale price, if not exist, fall back to origin price
+            var priceNode = productDetailNode?.SelectSingleNode(".//span[contains(@class, 'price')][2]");
+            if (priceNode == null)
+            {
+                priceNode = productDetailNode?.SelectSingleNode(".//span[contains(@class, 'price')][1]");
+            }
+
             var priceText = priceNode?.InnerText.Trim();
 
             //Parse price - remove currency sign and convert to decimal: $25.88 => 25.88

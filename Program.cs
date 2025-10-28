@@ -18,12 +18,15 @@ builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connect
 builder.Services.AddHttpClient();
 
 // Register Scraper Services
-// builder.Services.AddScoped<IProductScraper, TheIconicScraper>();
+builder.Services.AddScoped<IProductScraper, TheIconicScraper>();
 builder.Services.AddScoped<IProductScraper, BirdsNestScraper>();
 // builder.Services.AddScoped<IProductScraper, AmazonScraper>(); // Archived
 
 builder.Services.AddScoped<ScraperFactory>();
 builder.Services.AddScoped<ScraperService>();
+
+// Add Playwright browser Service 
+builder.Services.AddSingleton<PlaywrightBrowserService>();
 
 
 /* =========================
@@ -61,6 +64,10 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+// Init Playwright browser
+var playwrightService = app.Services.GetRequiredService<PlaywrightBrowserService>();
+await playwrightService.InitializeAsync();
+
 if (app.Environment.IsDevelopment())
 {
     // Backend endpoints
@@ -90,17 +97,17 @@ app.MapControllers();
 // ===== SCHEDULE RECURRING JOBS =======
 
 // Schedule scraper to run daily at 3PM
-RecurringJob.AddOrUpdate<ScraperService>(
-    "scrape-sandals-daily",
-    service => service.ScrapeAllRetailers("sandals"),
-    Cron.Daily(15)
-);
+// RecurringJob.AddOrUpdate<ScraperService>(
+//     "scrape-sandals-daily",
+//     service => service.ScrapeAllRetailers("sandals"),
+//     Cron.Daily(15)
+// );
 
-RecurringJob.AddOrUpdate<ScraperService>(
-    "scrape-popular-hourly",
-    service => service.ScrapePopularProducts(),
-    Cron.Hourly()
-);
+// RecurringJob.AddOrUpdate<ScraperService>(
+//     "scrape-popular-hourly",
+//     service => service.ScrapePopularProducts(),
+//     Cron.Hourly()
+// );
 
 
 app.Run();

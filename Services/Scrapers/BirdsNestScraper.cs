@@ -10,6 +10,7 @@ public class BirdsNestScraper : IProductScraper
     private readonly AppDbContext _context;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<BirdsNestScraper> _logger;
+    private readonly PlaywrightBrowserService _playwrightService;
 
 
     private const string BASE_URL = "https://www.birdsnest.com.au";
@@ -18,11 +19,13 @@ public class BirdsNestScraper : IProductScraper
 
     public BirdsNestScraper(AppDbContext context,
     IHttpClientFactory httpClientFactory,
-    ILogger<BirdsNestScraper> logger)
+    ILogger<BirdsNestScraper> logger,
+    PlaywrightBrowserService playwrightService)
     {
         _context = context;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
+        _playwrightService = playwrightService;
     }
 
     //Main method: Scrape products by search term
@@ -33,14 +36,14 @@ public class BirdsNestScraper : IProductScraper
             _logger.LogInformation("Starting scrape for search term: {SearchTerm}", searchTerm);
 
             //1. Build the search URL
-            var searchUrl = $"{BASE_URL}/search.php?search_query={Uri.EscapeDataString(searchTerm)}&section=content";
+            var searchUrl = $"{BASE_URL}/search.php?search_query={Uri.EscapeDataString(searchTerm)}&fh__product_type=%3E%7Bitem%7D&fh__sort_by=price_ascending&fh__page=1&page=1&section=content";
 
-            //2. Fetch the HTML from the website
-            var html = await FetchHtmlAsync(searchUrl);
+            //2. Fetch the HTML from the website using Playwright (browser automation)
+            var html = await FetchProductsFromPlaywrightAsync(searchTerm, searchUrl);
 
             if (string.IsNullOrEmpty(html))
             {
-                _logger.LogWarning("Failing to fetch HTML from {Url}", searchUrl);
+                _logger.LogWarning("Failed to fetch HTML from {Url}", searchUrl);
                 return 0;
             }
 
@@ -53,15 +56,26 @@ public class BirdsNestScraper : IProductScraper
                 return 0;
             }
 
+            //3.5 Remove duplicates within the current batch (same URL scraped twice)
+            var uniqueProducts = products
+                            .GroupBy(p => p.ProductUrl)
+                            .Select(g => g.First())
+                            .ToList();
+
+            if (uniqueProducts.Count < products.Count)
+            {
+                _logger.LogInformation("Removed {Count} duplicate products from current batch", products.Count - uniqueProducts.Count);
+            }
+
             //4. Check which products already exist in database - avoid duplicated
             var existingUrls = await _context.Product
-                            .Where(p => products.Select(x => x.ProductUrl).Contains(p.ProductUrl))
+                            .Where(p => uniqueProducts.Select(x => x.ProductUrl).Contains(p.ProductUrl))
                             .Select(p => p.ProductUrl)
                             .ToListAsync();
 
 
             //Filter out products already exist in db
-            var newProducts = products
+            var newProducts = uniqueProducts
                             .Where(p => !existingUrls.Contains(p.ProductUrl))
                             .ToList();
 
@@ -93,44 +107,11 @@ public class BirdsNestScraper : IProductScraper
     {
         try
         {
-            var html = await FetchHtmlAsync(BASE_URL);
+            // Use Playwright for health check since page is dynamically rendered
+            var html = await _playwrightService.FetchPageContentAsync(BASE_URL);
             return !string.IsNullOrEmpty(html);
         }
         catch { return false; }
-    }
-
-    // Helper: Step 1: Fetch HTML from website
-    private async Task<string> FetchHtmlAsync(string url)
-    {
-        try
-        {
-            // Create HttpClient using factory
-            var client = _httpClientFactory.CreateClient();
-
-            // Set User-Agent to identify our bot. Be honest
-            client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36");
-
-            // Optional: Add delay to be respecful to other real human users. Dont be DDOS
-            await Task.Delay(1000);
-
-            //Make GET request
-            var response = await client.GetAsync(url);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning(
-                    "HTTP request failed with status {StatusCode} for {Url}",
-                    response.StatusCode,
-                    url
-                );
-                return string.Empty;
-            }
-
-            // Read response body 
-            var html = await response.Content.ReadAsStringAsync();
-            return html;
-        }
-        catch (HttpRequestException e) { _logger.LogError(e, "HTTP request failed for URL: {Url}", url); return string.Empty; }
     }
 
     // Helper: Step 2: Parse HTML to extract Products. This is for all products found by searchTerm
@@ -237,8 +218,14 @@ public class BirdsNestScraper : IProductScraper
 
             // 4. Extract Price
             var priceNode = node.SelectSingleNode(".//span[contains(@class, 'globalPrices-defaultPrice')]");
-            var priceText = priceNode?.InnerText?.Trim();
 
+            // Fallback: if default price not found, try current price
+            if (priceNode == null)
+            {
+                priceNode = node.SelectSingleNode(".//span[contains(@class, 'globalPrices-currentPrice')]");
+            }
+
+            var priceText = priceNode?.InnerText?.Trim();
             var price = ParsePrice(priceText);
 
             if (price == 0)
@@ -282,8 +269,6 @@ public class BirdsNestScraper : IProductScraper
         }
         return null;
     }
-
-
     private decimal ParsePrice(string? priceText)
     {
         if (string.IsNullOrEmpty(priceText))
@@ -309,5 +294,32 @@ public class BirdsNestScraper : IProductScraper
             return 0;
         }
         catch { return 0; }
+    }
+
+    /// <summary>
+    /// Fetch rendered HTML from Birds Nest website using Playwright (headless browser)
+    /// This approach handles dynamic JavaScript rendering that simple HTTP requests cannot
+    /// </summary>
+    private async Task<string> FetchProductsFromPlaywrightAsync(string searchTerm, string searchUrl)
+    {
+        try
+        {
+            _logger.LogInformation("Fetching Birds Nest products using Playwright for: {SearchTerm}", searchTerm);
+
+            // Use Playwright to fetch the fully rendered HTML
+            var html = await _playwrightService.FetchPageContentAsync(searchUrl);
+
+            if (!string.IsNullOrEmpty(html))
+            {
+                _logger.LogInformation("Successfully fetched rendered HTML ({ByteCount} bytes) for {SearchTerm}", html.Length, searchTerm);
+            }
+
+            return html;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to fetch products from Birds Nest using Playwright for term: {SearchTerm}", searchTerm);
+            return string.Empty;
+        }
     }
 }
