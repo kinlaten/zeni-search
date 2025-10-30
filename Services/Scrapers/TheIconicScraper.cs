@@ -10,6 +10,7 @@ public class TheIconicScraper : IProductScraper
     private readonly AppDbContext _context;
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly ILogger<TheIconicScraper> _logger;
+    private readonly PriceHistoryService _priceHistoryService;
 
     //Base URL for the website
     private const string BASE_URL = "https://www.theiconic.com.au";
@@ -21,11 +22,13 @@ public class TheIconicScraper : IProductScraper
     public TheIconicScraper(
         AppDbContext context,
         IHttpClientFactory httpClientFactory,
-        ILogger<TheIconicScraper> logger)
+        ILogger<TheIconicScraper> logger,
+        PriceHistoryService priceHistoryService)
     {
         _context = context;
         _httpClientFactory = httpClientFactory;
         _logger = logger;
+        _priceHistoryService = priceHistoryService;
     }
 
     //Main method: Scrape products by search term
@@ -57,10 +60,11 @@ public class TheIconicScraper : IProductScraper
             }
 
             //4. Check which products already exist in database - avoid duplicated
-            var existingUrls = await _context.Product
+            var existingProducts = await _context.Product
                             .Where(p => products.Select(x => x.ProductUrl).Contains(p.ProductUrl))
-                            .Select(p => p.ProductUrl)
                             .ToListAsync();
+
+            var existingUrls = existingProducts.Select(p => p.ProductUrl).ToList();
 
 
             //Filter out products already exist in db
@@ -68,22 +72,65 @@ public class TheIconicScraper : IProductScraper
                             .Where(p => !existingUrls.Contains(p.ProductUrl))
                             .ToList();
 
-            if (newProducts.Count == 0)
+            if (newProducts.Count == 0 && existingProducts.Count == 0)
             {
-                _logger.LogInformation("All products already exist in database");
+                _logger.LogInformation("No new or existing products to process");
                 return 0;
             }
 
-
             //5. Save new products to database
-            _context.Product.AddRange(newProducts);
-            await _context.SaveChangesAsync();
+            if (newProducts.Count > 0)
+            {
+                _context.Product.AddRange(newProducts);
+                await _context.SaveChangesAsync();
+
+                _logger.LogInformation(
+                    "Successfully saved {Count} new products for '{SearchTerm}'", newProducts.Count, searchTerm
+                );
+            }
+
+            //6. Update prices for existing products and record price history
+            if (existingProducts.Count > 0)
+            {
+                var productsToUpdate = new List<Product>();
+
+                foreach (var existingProduct in existingProducts)
+                {
+                    var scrapedProduct = products.FirstOrDefault(p => p.ProductUrl == existingProduct.ProductUrl);
+
+                    if (scrapedProduct != null && scrapedProduct.Price != existingProduct.Price)
+                    {
+                        // Update the product's current price
+                        existingProduct.Price = scrapedProduct.Price;
+                        existingProduct.LastUpdated = DateTime.UtcNow;
+                        productsToUpdate.Add(existingProduct);
+
+                        // Record the price change in history
+                        await _priceHistoryService.RecordPriceIfChange(
+                            existingProduct.Id,
+                            scrapedProduct.Price,
+                            RetailerName
+                        );
+                    }
+                }
+
+                if (productsToUpdate.Count > 0)
+                {
+                    _context.Product.UpdateRange(productsToUpdate);
+                    await _context.SaveChangesAsync();
+
+                    _logger.LogInformation(
+                        "Updated prices for {Count} existing products", productsToUpdate.Count
+                    );
+                }
+            }
 
             _logger.LogInformation(
-                "Successfully scraped {Count} products for '{SearchTerm}'", newProducts.Count, searchTerm
+                "Scrape complete for '{SearchTerm}': {NewCount} new, {ExistingCount} existing processed",
+                searchTerm, newProducts.Count, existingProducts.Count
             );
 
-            return newProducts.Count;
+            return newProducts.Count + existingProducts.Count;
         }
         catch (Exception e)
         {
@@ -108,14 +155,14 @@ public class TheIconicScraper : IProductScraper
         try
         {
             // Create HttpClient using factory
-            var client = _httpClientFactory.CreateClient();
+            var client = _httpClientFactory.CreateClient("ScraperClient");
 
             client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Mobile Safari/537.36");
 
-            // Optional: Add delay to be respecful to other real human users. Dont be DDOS
+            // Add delay to be respecful to other real human users. Dont be DDOS
             await Task.Delay(1000);
 
-            //Make GET request
+            //Polly handle retries automatically
             var response = await client.GetAsync(url);
 
             if (!response.IsSuccessStatusCode)

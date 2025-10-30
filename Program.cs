@@ -5,6 +5,8 @@ using ZeniSearch.Api.Services;
 using ZeniSearch.Api.Services.Scrapers;
 using Hangfire;
 using Hangfire.PostgreSql;
+using Polly;
+using Polly.Extensions.Http;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -15,7 +17,43 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 builder.Services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
 
 // Register httpClientFactory
-builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("ScraperClient")
+                .AddPolicyHandler(GetRetryPolicy())
+                .AddPolicyHandler(GetCircuitBreakerPolicy());
+
+// Retry Policy: retry 3 times with exponential backoff
+static IAsyncPolicy<HttpResponseMessage> GetRetryPolicy()
+{
+    return HttpPolicyExtensions
+        .HandleTransientHttpError() //auto handle server error 5xx, 408
+        .OrResult(msg => msg.StatusCode == System.Net.HttpStatusCode.TooManyRequests) //Add error 429 to list of error that it should trigger retry
+        .WaitAndRetryAsync(retryCount: 3,
+        sleepDurationProvider: retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+        onRetry: (outcome, timespan, retryCount, context) =>
+        {
+            Console.WriteLine($"Retry {retryCount} after {timespan.TotalSeconds}s delay");
+        });
+}
+
+// Circuit breaker: Stop trying if too many failures
+static IAsyncPolicy<HttpResponseMessage> GetCircuitBreakerPolicy()
+{
+    return HttpPolicyExtensions
+        .HandleTransientHttpError()
+        .CircuitBreakerAsync(
+            handledEventsAllowedBeforeBreaking: 5, //Break after 5 failures
+            durationOfBreak: TimeSpan.FromMinutes(1), //Circuit open for 1 minute without attempt retry
+            onBreak: (outcome, duration) =>
+            {
+                Console.WriteLine($"Circuit breaker opened for {duration.TotalSeconds}s");
+            },
+            onReset: () =>
+            {
+                Console.WriteLine("Circuit breaker reset");
+            }
+
+        );
+}
 
 // Register Scraper Services
 builder.Services.AddScoped<IProductScraper, TheIconicScraper>();
@@ -28,6 +66,7 @@ builder.Services.AddScoped<ScraperService>();
 // Add Playwright browser Service 
 builder.Services.AddSingleton<PlaywrightBrowserService>();
 
+builder.Services.AddScoped<PriceHistoryService>();
 
 /* =========================
 HANGFIRE CONFIG
@@ -62,6 +101,9 @@ builder.Services.AddHangfireServer(options =>
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
+/* ====================
+RUN TIME ENV
+*/
 var app = builder.Build();
 
 // Init Playwright browser
