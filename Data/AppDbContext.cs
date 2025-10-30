@@ -10,6 +10,7 @@ public class AppDbContext : DbContext
 
     //Setter
     public DbSet<Product> Product { get; set; }
+    public DbSet<PriceHistory> PriceHistory { get; set; }
 
     //Custom Config
     protected override void OnModelCreating(ModelBuilder modelBuilder)
