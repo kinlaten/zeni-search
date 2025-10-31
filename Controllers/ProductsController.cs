@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using ZeniSearch.Api.Models;
 using ZeniSearch.Api.Data;
+using ZeniSearch.Api.Services;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Cryptography.X509Certificates;
 
@@ -11,12 +12,17 @@ namespace ZeniSearch.Api.Controllers;
 public class ProductsController : ControllerBase
 {
     private readonly AppDbContext _context;
+    private readonly CachedProductService _cachedProductService;
     private readonly ILogger<ProductsController> _logger;
 
     //Constructor
-    public ProductsController(AppDbContext context, ILogger<ProductsController> logger)
+    public ProductsController(
+        AppDbContext context,
+        CachedProductService cachedProductService,
+        ILogger<ProductsController> logger)
     {
         _context = context;
+        _cachedProductService = cachedProductService;
         _logger = logger;
     }
 
@@ -63,12 +69,8 @@ public class ProductsController : ControllerBase
                 return BadRequest(new { message = "Search query cannot be empty" });
             }
 
-            //query can be : name of product / brand
-            var products = await _context.Product
-                        .Where(p => p.Name.Contains(q) || (p.Brand != null && p.Brand.Contains(q)))
-                        .OrderBy(p => p.Price)
-                        .Take(50)
-                        .ToListAsync();
+            // Use cached search service for better performance
+            var products = await _cachedProductService.SearchProducts(q);
 
             return Ok(new { products, totalCount = products.Count, query = q });
         }

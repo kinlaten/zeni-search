@@ -7,6 +7,7 @@ using Hangfire;
 using Hangfire.PostgreSql;
 using Polly;
 using Polly.Extensions.Http;
+using ZeniSearch.Api.Middleware;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -101,6 +102,13 @@ builder.Services.AddHangfireServer(options =>
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
+builder.Services.AddHealthChecks()
+                .AddDbContextCheck<AppDbContext>("database")
+                .AddCheck<ScraperHealthCheck>("scraper");
+
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<CachedProductService>();
+
 /* ====================
 RUN TIME ENV
 */
@@ -109,6 +117,8 @@ var app = builder.Build();
 // Init Playwright browser
 var playwrightService = app.Services.GetRequiredService<PlaywrightBrowserService>();
 await playwrightService.InitializeAsync();
+
+app.UseMiddleware<GlobalExceptionHandler>();
 
 if (app.Environment.IsDevelopment())
 {
@@ -134,6 +144,7 @@ app.MapGet("/", () => "Hello world!");
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHealthChecks("health");
 
 
 // ===== SCHEDULE RECURRING JOBS =======
