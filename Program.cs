@@ -32,6 +32,7 @@ builder.Services.AddScoped<IProductScraper, BirdsNestScraper>();
 // Services
 builder.Services.AddScoped<ScraperFactory>();
 builder.Services.AddScoped<ScraperService>();
+builder.Services.AddScoped<ScraperMonitor>();
 builder.Services.AddScoped<PriceHistoryService>();
 builder.Services.AddScoped<CachedProductService>();
 

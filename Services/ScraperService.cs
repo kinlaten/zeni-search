@@ -5,13 +5,18 @@ namespace ZeniSearch.Api.Services;
 public class ScraperService
 {
     private readonly ScraperFactory _factory;
+    private readonly ScraperMonitor _monitor;
     private readonly ILogger<ScraperService> _logger;
 
     // Use IServiceProvider to create scope per job rather than AppDbContext
     // constructor
-    public ScraperService(ScraperFactory factory, ILogger<ScraperService> logger)
+    public ScraperService(
+        ScraperFactory factory,
+        ScraperMonitor monitor,
+        ILogger<ScraperService> logger)
     {
         _factory = factory;
+        _monitor = monitor;
         _logger = logger;
     }
 
@@ -29,20 +34,13 @@ public class ScraperService
         {
             try
             {
-
-                _logger.LogInformation(
-                    "Scraping {Retailer} for '{SearchTerm}'",
+                // Use monitor to wrap scraper execution with structured logging and alerting
+                var count = await _monitor.MonitorScraperExecution(
                     scraper.RetailerName,
-                    searchTerm
+                    async () => await scraper.ScrapeProducts(searchTerm, maxProducts: 100)
                 );
 
-                var count = await scraper.ScrapeProducts(searchTerm, maxProducts: 100);
-
-                _logger.LogInformation(
-                    "{Retailer}: {Count} new products",
-                   scraper.RetailerName,
-                   count
-                );
+                results[scraper.RetailerName] = count;
 
                 // Rate limiting: wait between retailers
                 await Task.Delay(TimeSpan.FromSeconds(5));
@@ -89,7 +87,12 @@ public class ScraperService
         {
             try
             {
-                await scraper.ScrapeProducts(searchTerm, maxProducts: 50);
+                // Use monitor for structured monitoring
+                await _monitor.MonitorScraperExecution(
+                    $"{scraper.RetailerName}-healthy",
+                    async () => await scraper.ScrapeProducts(searchTerm, maxProducts: 50)
+                );
+
                 await Task.Delay(TimeSpan.FromSeconds(5));
             }
             catch (Exception ex)
